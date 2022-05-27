@@ -489,6 +489,13 @@ void ONNXSizeOp::getCanonicalizationPatterns(
   results.insert<SizeToConstantPattern>(context);
 }
 
+/// on the ONNXConstantOfShapeOp.
+void ONNXConstantOfShapeOp::getCanonicalizationPatterns(
+    RewritePatternSet &results, MLIRContext *context) {
+  results.insert<ConstantOfShapeToConstantPattern1>(context);
+  results.insert<ConstantOfShapeToConstantPattern2>(context);
+}
+
 /// on the ONNXGlobalAveragePoolOp.
 void ONNXGlobalAveragePoolOp::getCanonicalizationPatterns(
     RewritePatternSet &results, MLIRContext *context) {

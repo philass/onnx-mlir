@@ -70,8 +70,11 @@ def createArrayAttrOfTwoToRankOf : NativeCodeCall<
 def ONNXConstantOpNormalize: NativeCodeCall<
   "onnx_mlir::normalizeConstantOp($_builder, $0, $1)">;
 
+def AttributeIsNull :
+  Constraint<CPred<" (!$_self) ">, "Attribute is null">;
+
 def AttributeIsNotNull :
-  Constraint<CPred<" ($_self) ">, "Attribute is null">;
+  Constraint<CPred<" ($_self) ">, "Attribute is not null">;
 
 def IsDenseElementsAttr :
   Constraint<And<[CPred<" ($_self) ">, 
@@ -94,6 +97,8 @@ def GetNullIntegerAttr : NativeCodeCall<"IntegerAttr()">;
 def GetNullStringAttr : NativeCodeCall<"StringAttr()">;
 
 def GetNullArrayAttr :  NativeCodeCall<"ArrayAttr()">;
+
+def GetZeroFloat32Attr : NativeCodeCall<"$_builder.getF32FloatAttr(0.0)">;
 
 // Check whether an ArrayAttr contains non-zero values or not.
 def HasNonZeroInArrayAttr: Constraint<CPred<"hasNonZeroInArrayAttr($_self)">,
@@ -711,6 +716,22 @@ def ConstantOpNormalizationPattern6: Pat<
        $intsAttr, $stringAttr, $stringsAttr),
    (ONNXConstantOpNormalize $res, $stringsAttr),
    [(AttributeIsNotNull:$stringsAttr)]
+>;
+
+//===----------------------------------------------------------------------===//
+// Canonicalization for ONNXConstantOfShapeOp
+//===----------------------------------------------------------------------===//
+
+def ConstantOfShapeToConstantPattern1: Pat<
+   (ONNXConstantOfShapeOp:$res $A $x),
+   (ONNXConstantOpNormalize $res, $x),
+   [(IsStaticShapeTensor:$A), (AttributeIsNotNull:$x)]
+>;
+
+def ConstantOfShapeToConstantPattern2: Pat<
+   (ONNXConstantOfShapeOp:$res $A $x),
+   (ONNXConstantOpNormalize $res, (GetZeroFloat32Attr)),
+   [(IsStaticShapeTensor:$A), (AttributeIsNull:$x)]
 >;
 
 //===----------------------------------------------------------------------===//
