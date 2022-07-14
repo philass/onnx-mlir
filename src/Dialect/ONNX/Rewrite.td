@@ -751,4 +751,20 @@ def LessOpSameCastPattern: Pat<
     (ElementTypeIsNotUnsigned:$cast_a)]
 >;
 
+//===----------------------------------------------------------------------===//
+// Rewrite of layout
+//===----------------------------------------------------------------------===//
+// TODO handle case when initial_h is Zero
+def RNNLayoutPattern: Pat<
+   (ONNXRNNOp $alpha, $beta, $act, $clip, $dir, $hidden_size, $layout,
+      $X, $W, $R, $B, $seq_len, $initial_h)
+   (ONNXRNNOp $alpha, $beta, $act, $clip, $dir, $hidden_size, ($0),
+      $X, $W, $R, $B, $seq_len, $initial_h)
+   (ONNXLessOp $a, $b),
+   [(HaveSameElementType $a, $b), (Equal $to1, $to2),
+    (HaveSameElementTypeBitWidth $a, $cast_a),
+    (ElementTypeIsNotUnsigned:$cast_a)]
+>;
+    
+
 #endif // ONNX_REWRITE
