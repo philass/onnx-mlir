@@ -278,6 +278,7 @@ OpsWithCanonicalizer = [
     'Loop',
     'Mul',
     'Reshape',
+    'RNN',
     'Shape',
     'Size',
     'SpaceToDepth',

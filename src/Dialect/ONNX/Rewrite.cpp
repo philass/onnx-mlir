@@ -398,6 +398,75 @@ private:
   }
 };
 
+namespace {
+  template<typename ONNXOp>
+  void inferShape(Value v) {
+    auto op = v.getDefiningOp();
+    (void)llvm::cast<ONNXOp>(op).inferShapes([](Region &region) {});
+  }
+
+  template<typename ONNXOp>
+  void inferShape(ONNXOp op) {
+    (void)op.inferShapes([](Region &region) {});
+  }
+}
+
+class RNNOpRewriteLayoutPattern : public OpRewritePattern<ONNXRNNOp> {
+public:
+  using OpRewritePattern<ONNXRNNOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ONNXRNNOp onnxRNNOp, PatternRewriter &rewriter) const override {
+    //auto operands = onnxRNNOp->getOperands();
+    //auto attributes = onnxRNNOp->getAttrDictionary();
+    if (onnxRNNOp.layout() == 0) {
+      return success();
+    }
+
+    onnx_mlir::MultiDialectBuilder<onnx_mlir::OnnxBuilder> create(rewriter, onnxRNNOp.getLoc());
+
+    SmallVector<int64_t, 3> perm3{1, 0, 2};
+    SmallVector<int64_t, 4> perm4{2, 0, 1, 3};
+    ArrayAttr perm3Attr = rewriter.getI64ArrayAttr(perm3);
+    ArrayAttr perm4Attr = rewriter.getI64ArrayAttr(perm4);
+    Type elType = onnxRNNOp.X().getType().cast<ShapedType>().getElementType();
+    Type unrankedType = UnrankedTensorType::get({elType});
+
+    rewriter.updateRootInPlace(onnxRNNOp, [&]() {
+
+      onnxRNNOp->setAttr(onnxRNNOp.layoutAttrName(), rewriter.getIntegerAttr(rewriter.getIntegerType(64, /*isSigned=*/true), 0));
+      Value X = onnxRNNOp.X();
+      Value X_tr = create.onnx.transpose(unrankedType, X, perm3Attr);
+      inferShape<ONNXTransposeOp>(X_tr);
+      onnxRNNOp.XMutable().assign(X_tr);
+
+      Value initial_h = onnxRNNOp.initial_h();
+      if (!initial_h.getType().isa<NoneType>()) {
+        Value initial_h_tr = create.onnx.transpose(unrankedType, initial_h, perm3Attr);
+        inferShape<ONNXTransposeOp>(initial_h_tr);
+        onnxRNNOp.initial_hMutable().assign(initial_h_tr);
+      }
+      inferShape<ONNXRNNOp>(onnxRNNOp);
+    });
+
+    ValueRange results = onnxRNNOp.getResults();
+    if (results.size() > 0) {
+      rewriter.setInsertionPointAfter(onnxRNNOp);
+      Value Y = onnxRNNOp.Y();
+      Value Y_tr = create.onnx.transpose(unrankedType, Y, perm4Attr);
+      inferShape<ONNXTransposeOp>(Y_tr);
+      Y.replaceAllUsesExcept(Y_tr, Y_tr.getDefiningOp());
+      if (results.size() > 1) {
+        Value Y_h = onnxRNNOp.Y_h();
+        Value Y_h_tr = create.onnx.transpose(unrankedType, Y_h, perm3Attr);
+        inferShape<ONNXTransposeOp>(Y_h_tr);
+        Y_h.replaceAllUsesExcept(Y_h_tr, Y_h_tr.getDefiningOp());
+      }
+    }
+
+  return success();
+  }
+};
+
 /// Register optimization patterns as "canonicalization" patterns
 /// on the ONNXAddOp.
 void ONNXAddOp::getCanonicalizationPatterns(
@@ -431,8 +500,8 @@ void ONNXCastOp::getCanonicalizationPatterns(
 /// on the ONNXTransposeOp.
 void ONNXTransposeOp::getCanonicalizationPatterns(
     RewritePatternSet &result, MLIRContext *context) {
-  result.insert<FuseTransposePattern>(context);
-  result.insert<RemoveIdentityTransposePattern>(context);
+ // result.insert<FuseTransposePattern>(context);
+ // result.insert<RemoveIdentityTransposePattern>(context);
   result.insert<SwapTransposeConcatPattern>(context);
 }
 
@@ -537,4 +606,10 @@ void ONNXLessOp::getCanonicalizationPatterns(
 void ONNXLoopOp::getCanonicalizationPatterns(
     RewritePatternSet &results, MLIRContext *context) {
   results.insert<LoopOpRewriteMaxTripCountPattern>(context);
+}
+
+// on the RNN Op
+void ONNXRNNOp::getCanonicalizationPatterns(
+    RewritePatternSet &results, MLIRContext *context) {
+  results.insert<RNNOpRewriteLayoutPattern>(context);
 }

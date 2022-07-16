@@ -747,9 +747,22 @@ func @test_rnn_all_results(%arg0: tensor<4x3x2xf32>, %arg1: tensor<1x12x2xf32>, 
   return %Y_h : tensor<*xf32>
 
   // CHECK-LABEL: test_rnn_all_results
-  // CHECK: [[CST:%.+]] = "onnx.NoValue"() {value} : () -> none  
+  // CHECK: [[CST:%.+]] = "onnx.NoValue"() {value} : () -> none
   // CHECK-NEXT: %{{.*}}, [[RES:%.+]] = "onnx.RNN"(%arg0, %arg1, %arg2, [[CST]], [[CST]], [[CST]]) {hidden_size = 3 : si64} : (tensor<4x3x2xf32>, tensor<1x12x2xf32>, tensor<1x12x3xf32>, none, none, none) -> (tensor<4x1x3x3xf32>, tensor<1x3x3xf32>)
   // CHECK: return [[RES]] : tensor<1x3x3xf32>
+}
+
+// -----
+
+func @test_rnn_layout1(%arg0: tensor<4x3x2xf32>, %arg1: tensor<1x12x2xf32>, %arg2: tensor<1x12x3xf32>) -> tensor<*xf32> {
+  %cst = "onnx.NoValue"() {value} : () -> none
+  %Y, %Y_h = "onnx.RNN"(%arg0, %arg1, %arg2, %cst, %cst, %cst) {layout = 1 : si64, hidden_size = 3 : si64} : (tensor<4x3x2xf32>, tensor<1x12x2xf32>, tensor<1x12x3xf32>, none, none, none) -> (tensor<*xf32>, tensor<*xf32>)
+  return %Y_h : tensor<*xf32>
+
+  // CHECK-LABEL: test_rnn_layout1
+  // CHECK: [[CST:%.+]] = "onnx.NoValue"() {value} : () -> none
+  // CHECK-NEXT: %{{.*}}, [[RES:%.+]] = "onnx.RNN"(%arg0, %arg1, %arg2, [[CST]], [[CST]], [[CST]]) {hidden_size = 3 : si64} : (tensor<4x3x2xf32>, tensor<1x12x2xf32>, tensor<1x12x3xf32>, none, none, none) -> (tensor<3x4x1x3xf32>, tensor<3x1x3xf32>)
+  // CHECK: return [[RES]] : tensor<3x1x3xf32>
 }
 
 // -----

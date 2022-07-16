@@ -474,7 +474,9 @@ static void insertConvSpatialDim(SmallVector<int64_t, 4> *outputDims,
 // Support function that infers shape for RNN operations.
 //===----------------------------------------------------------------------===//
 template <typename T>
-static LogicalResult RNNShapeInference(T *op) {
+static LogicalResult RNNShapeInference(T *op, bool batchwiseLayout = false) {
+  //bool batchwiseLayout = op->layout() == 1;
+
   Value X = op->X();
   Value W = op->W();
   Value R = op->R();
@@ -488,7 +490,8 @@ static LogicalResult RNNShapeInference(T *op) {
   auto xTy = X.getType().cast<RankedTensorType>();
   auto elementType = xTy.getElementType();
 
-  // xShape :: [seq_length, batch_size, input_size]
+  // xShape :: [batch_size, seq_length, input_size] if batchwiseLayout
+  // xShape :: [seq_length, batch_size, input_size] otherwise
   auto xShape = xTy.getShape();
   // wShape :: [num_directions, 4*hidden_size, input_size]
   auto wShape = W.getType().cast<RankedTensorType>().getShape();
@@ -506,8 +509,15 @@ static LogicalResult RNNShapeInference(T *op) {
   }
 
   // Get sequence length, batch size and input size.
-  auto sequenceLength = xShape[0];
-  auto batchSize = xShape[1];
+  int64_t sequenceLength;
+  int64_t batchSize;
+  if (batchwiseLayout) {
+    sequenceLength = xShape[1];
+    batchSize = xShape[0];
+  } else {
+    sequenceLength = xShape[0];
+    batchSize = xShape[1];
+  }
 
   // Get hidden size from hidden_size attribute.
   int64_t hiddenSize = -1;
@@ -548,29 +558,47 @@ static LogicalResult RNNShapeInference(T *op) {
   // Set result types.
   unsigned numOfResults = op->getNumResults();
   if (numOfResults > 0) {
-    // Y :: [seq_length, num_directions, batch_size, hidden_size]
+    // Y :: [batch_size, seq_length, num_directions, hidden_size] if batchwiseLayout
+    // Y :: [seq_length, num_directions, batch_size, hidden_size] otherwise
     Type yTy = op->getResults()[0].getType();
     if (!yTy.isa<NoneType>()) {
-      yTy = RankedTensorType::get(
-          {sequenceLength, numDirection, batchSize, hiddenSize}, elementType);
+      if (batchwiseLayout) {
+        yTy = RankedTensorType::get(
+            {batchSize, sequenceLength, numDirection, hiddenSize}, elementType);
+      } else {
+        yTy = RankedTensorType::get(
+            {sequenceLength, numDirection, batchSize, hiddenSize}, elementType);
+      }
       op->getResults()[0].setType(yTy);
     }
   }
   if (numOfResults > 1) {
-    // Y_h :: [num_directions, batch_size, hidden_size]
+    // Y_h :: [batch_size, num_directions, hidden_size] if batchwiseLayout
+    // Y_h :: [num_directions, batch_size, hidden_size] otherwise
     Type yhTy = op->getResults()[1].getType();
     if (!yhTy.isa<NoneType>()) {
-      yhTy = RankedTensorType::get(
+      if (batchwiseLayout) {
+        yhTy = RankedTensorType::get(
+          {batchSize, numDirection, hiddenSize}, elementType);
+      } else { 
+        yhTy = RankedTensorType::get(
           {numDirection, batchSize, hiddenSize}, elementType);
+      }
       op->getResults()[1].setType(yhTy);
     }
   }
   if (numOfResults > 2) {
-    // Y_c :: [num_directions, batch_size, hidden_size]
+    // Y_c :: [batch_size, num_directions, hidden_size] if batchwiseLayout
+    // Y_c :: [num_directions, batch_size, hidden_size] otherwise
     Type ycTy = op->getResults()[2].getType();
     if (!ycTy.isa<NoneType>()) {
-      ycTy = RankedTensorType::get(
+      if (batchwiseLayout) {
+        ycTy = RankedTensorType::get(
+          {batchSize, numDirection, hiddenSize}, elementType);
+      } else { 
+        ycTy = RankedTensorType::get(
           {numDirection, batchSize, hiddenSize}, elementType);
+      }
       op->getResults()[2].setType(ycTy);
     }
   }
@@ -2837,7 +2865,9 @@ LogicalResult ONNXConcatFromSequenceOp::inferShapes(
 
 LogicalResult ONNXRNNOp::inferShapes(
     std::function<void(mlir::Region &)> doShapeInference) {
-  return RNNShapeInference<>(this);
+
+  bool batchwiseLayout = layout() == 1;
+  return RNNShapeInference<>(this, batchwiseLayout);
 }
 
 //===----------------------------------------------------------------------===//
