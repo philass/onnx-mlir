@@ -5175,11 +5175,24 @@ def ONNXScatterElementsOp:ONNX_Op<"ScatterElements",
   "entry in `indices` and the index-value for dimension != axis is obtained from the"
   "index of the entry itself."
   ""
-  "For instance, in a 2-D tensor case, the update corresponding to the [i][j] entry"
-  "is performed as below:"
+  "`reduction` allows specification of an optional reduction operation, which is applied to all values in `updates`"
+  "tensor into `output` at the specified `indices`."
+  "In cases where `reduction` is set to \"none\", indices should not have duplicate entries: that is, if idx1 != idx2, "
+  "then indices[idx1] != indices[idx2]. For instance, in a 2-D tensor case, the update "
+  "corresponding to the [i][j] entry is performed as below:"
   "```"
   "  output[indices[i][j]][j] = updates[i][j] if axis = 0,"
   "  output[i][indices[i][j]] = updates[i][j] if axis = 1,"
+  "```"
+  "When `reduction` is set to \"add\", the update corresponding to the [i][j] entry is performed as below:"
+  "```"
+  "  output[indices[i][j]][j] += updates[i][j] if axis = 0,"
+  "  output[i][indices[i][j]] += updates[i][j] if axis = 1,"
+  "```"
+  "When `reduction` is set to \"mul\", the update corresponding to the [i][j] entry is performed as below:"
+  "```"
+  "  output[indices[i][j]][j] *= updates[i][j] if axis = 0,"
+  "  output[i][indices[i][j]] *= updates[i][j] if axis = 1,"
   "```"
   ""
   "This operator is the inverse of GatherElements. It is similar to Torch's Scatter operation."
@@ -5217,7 +5230,8 @@ def ONNXScatterElementsOp:ONNX_Op<"ScatterElements",
   let arguments = (ins AnyTypeOf<[TensorOf<[UI8]>, TensorOf<[UI16]>, TensorOf<[UI32]>, TensorOf<[UI64]>, TensorOf<[I8]>, TensorOf<[I16]>, TensorOf<[I32]>, TensorOf<[I64]>, TensorOf<[BF16]>, TensorOf<[F16]>, TensorOf<[F32]>, TensorOf<[F64]>, TensorOf<[StringType]>, TensorOf<[I1]>, TensorOf<[Complex<F32>]>, TensorOf<[Complex<F64>]>]>:$data,
     AnyTypeOf<[TensorOf<[I32]>, TensorOf<[I64]>]>:$indices,
     AnyTypeOf<[TensorOf<[UI8]>, TensorOf<[UI16]>, TensorOf<[UI32]>, TensorOf<[UI64]>, TensorOf<[I8]>, TensorOf<[I16]>, TensorOf<[I32]>, TensorOf<[I64]>, TensorOf<[BF16]>, TensorOf<[F16]>, TensorOf<[F32]>, TensorOf<[F64]>, TensorOf<[StringType]>, TensorOf<[I1]>, TensorOf<[Complex<F32>]>, TensorOf<[Complex<F64>]>]>:$updates,
-    DefaultValuedAttr<SI64Attr, "0">:$axis);
+    DefaultValuedAttr<SI64Attr, "0">:$axis,
+    DefaultValuedStrAttr<StrAttr, "none">:$reduction);
   let results = (outs AnyTypeOf<[TensorOf<[UI8]>, TensorOf<[UI16]>, TensorOf<[UI32]>, TensorOf<[UI64]>, TensorOf<[I8]>, TensorOf<[I16]>, TensorOf<[I32]>, TensorOf<[I64]>, TensorOf<[BF16]>, TensorOf<[F16]>, TensorOf<[F32]>, TensorOf<[F64]>, TensorOf<[StringType]>, TensorOf<[I1]>, TensorOf<[Complex<F32>]>, TensorOf<[Complex<F64>]>]>:$output);
   let extraClassDeclaration = [{
     static int getNumberOfOperands() {

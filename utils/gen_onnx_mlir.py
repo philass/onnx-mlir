@@ -207,7 +207,7 @@ version_dict = {
  'Scaler': [1],
  'Scan': [16],
  'Scatter': [11],
- 'ScatterElements': [13],
+ 'ScatterElements': [16],
  'ScatterND': [16],
  'Selu': [6],
  'SequenceAt': [11],
